@@ -1,0 +1,14 @@
+{
+  "name": "mtb-map",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "node build-geojson.mjs",
+    "start": "python3 -m http.server 8765"
+  },
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "fit-file-parser": "^6.1.2"
+  }
+}

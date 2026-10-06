@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pyrenees MTB Week</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --ink: #1a1f1c;
+      --paper: #f4f0e6;
+      --panel: rgba(244, 240, 230, 0.94);
+      --line: #2d5a3d;
+      --muted: #5c6b60;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+    }
+
+    #map { height: 100%; width: 100%; }
+
+    .panel {
+      position: absolute;
+      z-index: 1000;
+      top: 1rem;
+      left: 1rem;
+      width: min(320px, calc(100vw - 2rem));
+      max-height: calc(100vh - 2rem);
+      overflow: auto;
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(45, 90, 61, 0.25);
+      padding: 1rem 1.1rem 1.1rem;
+      box-shadow: 0 12px 40px rgba(26, 31, 28, 0.18);
+    }
+
+    .panel h1 {
+      margin: 0 0 0.2rem;
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--line);
+    }
+
+    .panel .sub {
+      margin: 0 0 0.85rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .totals {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.45rem 0.75rem;
+      margin-bottom: 0.9rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1px solid rgba(45, 90, 61, 0.2);
+      font-size: 0.82rem;
+    }
+
+    .totals strong {
+      display: block;
+      font-size: 1.05rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+    }
+
+    .totals span { color: var(--muted); }
+
+    .rides { list-style: none; margin: 0; padding: 0; }
+
+    .rides li {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.55rem;
+      align-items: start;
+      padding: 0.45rem 0;
+      border-bottom: 1px solid rgba(45, 90, 61, 0.12);
+      cursor: pointer;
+    }
+
+    .rides li:hover { background: rgba(45, 90, 61, 0.06); }
+    .rides li.dim .meta { opacity: 0.45; }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      margin-top: 0.3rem;
+      border-radius: 2px;
+    }
+
+    .meta .name {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .meta .detail {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.15rem;
+    }
+
+    .toggle {
+      appearance: none;
+      width: 1rem;
+      height: 1rem;
+      margin-top: 0.25rem;
+      border: 1.5px solid var(--line);
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .toggle:checked {
+      background: var(--line);
+      box-shadow: inset 0 0 0 2px #fff;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.85rem;
+    }
+
+    .actions button {
+      flex: 1;
+      border: 1px solid rgba(45, 90, 61, 0.35);
+      background: transparent;
+      color: var(--line);
+      font: inherit;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.5rem;
+      cursor: pointer;
+    }
+
+    .actions button:hover { background: rgba(45, 90, 61, 0.08); }
+
+    .leaflet-popup-content {
+      margin: 0.65rem 0.85rem;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .leaflet-popup-content strong { color: var(--line); }
+
+    @media (max-width: 640px) {
+      .panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        max-height: 42vh;
+        border-radius: 12px 12px 0 0;
+      }
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Serif:wght@600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="map"></div>
+  <aside class="panel">
+    <h1>Pyrenees MTB</h1>
+    <p class="sub">21–26 Sep 2026 · OpenStreetMap</p>
+    <div class="totals" id="totals"></div>
+    <ul class="rides" id="rides"></ul>
+    <div class="actions">
+      <button type="button" id="showAll">Show all</button>
+      <button type="button" id="fitAll">Fit map</button>
+    </div>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const COLORS = [
+      "#c45c26", "#2d5a3d", "#1f4e79", "#8b3a3a",
+      "#6b4f9a", "#b8860b", "#0f766e", "#9a3412", "#334155"
+    ];
+
+    const map = L.map("map", { zoomControl: true }).setView([42.7, 0.85], 10);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+
+    const layers = new Map();
+    const group = L.featureGroup().addTo(map);
+
+    function fmt(n, d = 0) {
+      return Number(n).toLocaleString("en-US", {
+        maximumFractionDigits: d,
+        minimumFractionDigits: d,
+      });
+    }
+
+    fetch("data/tracks.geojson")
+      .then((r) => r.json())
+      .then((geojson) => {
+        const features = geojson.features.slice().sort((a, b) =>
+          (a.properties.date + a.properties.name).localeCompare(b.properties.date + b.properties.name)
+        );
+
+        const totals = features.reduce(
+          (acc, f) => {
+            acc.km += f.properties.distanceKm || 0;
+            acc.m += f.properties.elevGainM || 0;
+            acc.hr += (f.properties.avgHr || 0) * (f.properties.distanceKm || 0);
+            return acc;
+          },
+          { km: 0, m: 0, hr: 0 }
+        );
+        const avgHr = totals.km ? Math.round(totals.hr / totals.km) : 0;
+
+        document.getElementById("totals").innerHTML = `
+          <div><span>Distance</span><strong>${fmt(totals.km, 0)} km</strong></div>
+          <div><span>Climbing</span><strong>${fmt(totals.m)} m</strong></div>
+          <div><span>Rides</span><strong>${features.length}</strong></div>
+          <div><span>Avg HR (≈)</span><strong>${avgHr} bpm</strong></div>
+        `;
+
+        const list = document.getElementById("rides");
+
+        features.forEach((feature, i) => {
+          const p = feature.properties;
+          const color = COLORS[i % COLORS.length];
+          const layer = L.geoJSON(feature, {
+            style: {
+              color,
+              weight: 4,
+              opacity: 0.9,
+              lineJoin: "round",
+              lineCap: "round",
+            },
+          });
+
+          layer.bindPopup(`
+            <strong>${p.date} · ${p.name}</strong><br/>
+            ${p.distanceKm} km · +${fmt(p.elevGainM)} m<br/>
+            ${p.duration} · avg HR ${p.avgHr} bpm
+          `);
+
+          layer.addTo(group);
+          layers.set(p.id, { layer, color, feature });
+
+          const li = document.createElement("li");
+          li.dataset.id = p.id;
+          li.innerHTML = `
+            <input class="toggle" type="checkbox" checked aria-label="Toggle ${p.name}" />
+            <div class="meta">
+              <div class="name">${p.date.slice(5)} · ${p.name}</div>
+              <div class="detail">${p.distanceKm} km · +${fmt(p.elevGainM)} m · ${p.avgHr} bpm</div>
+            </div>
+            <span class="swatch" style="background:${color}"></span>
+          `;
+
+          const toggle = li.querySelector(".toggle");
+          toggle.addEventListener("change", () => {
+            if (toggle.checked) {
+              group.addLayer(layer);
+              li.classList.remove("dim");
+            } else {
+              group.removeLayer(layer);
+              li.classList.add("dim");
+            }
+          });
+
+          li.addEventListener("click", (e) => {
+            if (e.target === toggle) return;
+            if (!group.hasLayer(layer)) {
+              toggle.checked = true;
+              group.addLayer(layer);
+              li.classList.remove("dim");
+            }
+            map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 13 });
+            layer.openPopup(layer.getBounds().getCenter());
+          });
+
+          list.appendChild(li);
+        });
+
+        map.fitBounds(group.getBounds(), { padding: [30, 30] });
+      })
+      .catch((err) => {
+        document.getElementById("totals").innerHTML =
+          `<div style="grid-column:1/-1;color:#8b3a3a">Could not load tracks: ${err.message}</div>`;
+      });
+
+    document.getElementById("showAll").addEventListener("click", () => {
+      document.querySelectorAll(".rides li").forEach((li) => {
+        const id = li.dataset.id;
+        const entry = layers.get(id);
+        const toggle = li.querySelector(".toggle");
+        toggle.checked = true;
+        li.classList.remove("dim");
+        if (entry && !group.hasLayer(entry.layer)) group.addLayer(entry.layer);
+      });
+      if (group.getLayers().length) map.fitBounds(group.getBounds(), { padding: [30, 30] });
+    });
+
+    document.getElementById("fitAll").addEventListener("click", () => {
+      if (group.getLayers().length) map.fitBounds(group.getBounds(), { padding: [30, 30] });
+    });
+  </script>
+</body>
+</html>
